@@ -1,0 +1,11 @@
+{
+    "credentials": {
+        "roll_number": "YOUR_ROLL_NUMBER",
+        "password": "YOUR_PASSWORD"
+    },
+    "server": {
+        "host": "localhost",
+        "port": 8080,
+        "sse_mode": true
+    }
+} 

@@ -192,3 +192,12 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+# Project-specific ignores
+# Ignore all files and folders starting with "ecampus"
+ecampus*
+
+# Ignore log files
+*.log
+logs/
+*.log.*
