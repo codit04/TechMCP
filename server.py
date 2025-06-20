@@ -11,8 +11,10 @@ from datetime import datetime
 from fastmcp import FastMCP
 
 # Import our modular components
-from scrapers import CAMarksScraper
+from scrapers import CAMarksScraper, AttendanceScraper, TimeTableScraper
 from tools.marks_tools import register_marks_tools
+from tools.attendance_tools import register_attendance_tools
+from tools.timetable_tools import register_timetable_tools
 
 # Enhanced logging configuration
 logging.basicConfig(
@@ -34,33 +36,65 @@ class SessionManager:
     """Manages scraper sessions and handles connection reuse"""
     
     def __init__(self):
-        self._scraper = None
+        self._marks_scraper = None
+        self._attendance_scraper = None
+        self._timetable_scraper = None
         logger.info("SessionManager initialized")
     
     async def get_scraper(self) -> CAMarksScraper:
-        """Get or create a scraper instance"""
-        if self._scraper is None:
-            logger.info("Creating new scraper instance...")
-            self._scraper = CAMarksScraper()
-            logger.info("New scraper instance created")
-        return self._scraper
+        """Get or create a marks scraper instance"""
+        if self._marks_scraper is None:
+            logger.info("Creating new marks scraper instance...")
+            self._marks_scraper = CAMarksScraper()
+            logger.info("New marks scraper instance created")
+        return self._marks_scraper
+    
+    async def get_attendance_scraper(self) -> AttendanceScraper:
+        """Get or create an attendance scraper instance"""
+        if self._attendance_scraper is None:
+            logger.info("Creating new attendance scraper instance...")
+            self._attendance_scraper = AttendanceScraper()
+            logger.info("New attendance scraper instance created")
+        return self._attendance_scraper
+    
+    async def get_timetable_scraper(self) -> TimeTableScraper:
+        """Get or create a timetable scraper instance"""
+        if self._timetable_scraper is None:
+            logger.info("Creating new timetable scraper instance...")
+            self._timetable_scraper = TimeTableScraper()
+            logger.info("New timetable scraper instance created")
+        return self._timetable_scraper
     
     async def close_session(self):
-        """Close the current scraper session"""
-        if self._scraper:
-            logger.info("Closing scraper session...")
-            self._scraper.close()
-            self._scraper = None
-            logger.info("Scraper session closed successfully")
+        """Close all scraper sessions"""
+        if self._marks_scraper:
+            logger.info("Closing marks scraper session...")
+            self._marks_scraper.close()
+            self._marks_scraper = None
+            logger.info("Marks scraper session closed successfully")
+        
+        if self._attendance_scraper:
+            logger.info("Closing attendance scraper session...")
+            self._attendance_scraper.close()
+            self._attendance_scraper = None
+            logger.info("Attendance scraper session closed successfully")
+        
+        if self._timetable_scraper:
+            logger.info("Closing timetable scraper session...")
+            self._timetable_scraper.close()
+            self._timetable_scraper = None
+            logger.info("Timetable scraper session closed successfully")
 
 # Create global session manager
 logger.info("Creating global session manager...")
 session_manager = SessionManager()
 logger.info("Global session manager created")
 
-# Register all marks tools
+# Register all tools
 logger.info("Registering MCP tools...")
 register_marks_tools(mcp, session_manager)
+register_attendance_tools(mcp, session_manager)
+register_timetable_tools(mcp, session_manager)
 logger.info("All tools registered successfully")
 
 if __name__ == "__main__":
@@ -71,6 +105,7 @@ if __name__ == "__main__":
         logger.info("=" * 50)
         # Run the server with SSE transport on port 8080
         mcp.run(transport="sse", host="127.0.0.1", port=8080)
+        
     except KeyboardInterrupt:
         logger.info("Server shutdown requested by user")
     except Exception as e:
