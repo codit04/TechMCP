@@ -6,7 +6,8 @@ This module contains all MCP tools related to course code data, course informati
 
 import logging
 from typing import List, Dict, Any, Union, Optional
-from datetime import datetime
+from datetime import datetime, timedelta, time # Import 'time' for handling datetime.time objects
+import asyncio
 
 # These will be imported when the tools are registered
 mcp = None
@@ -14,6 +15,9 @@ session_manager = None
 
 # Import from our scrapers package
 from scrapers.coursecode_scraper import CourseCodeScraper, CourseInfo
+# Note: The TimetableEntry here must match the definition in your timetable_scraper.py
+# which is now pointing to PSG Tech portal.
+from scrapers.timetable_scraper import TimeTableScraper, TimeTableEntry 
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +30,6 @@ def log_tool_response(tool_name: str, result: Any, error: Optional[Exception] = 
         logger.error(f"❌ ERROR - Function: {tool_name}")
         logger.error(f"📤 ERROR_RESPONSE - Error: {str(error)}")
         logger.error(f"📤 ERROR_RESPONSE - Type: {type(error).__name__}")
-        logger.error(f"📤 ERROR_RESPONSE - Timestamp: {datetime.now().isoformat()}")
     else:
         logger.info(f"✅ TOOL_RESPONSE: {tool_name} - Result: {result}")
 
@@ -38,7 +41,6 @@ async def handle_coursecode_error(error: Exception, operation: str) -> Dict[str,
         "success": False,
         "error": True,
         "message": f"Failed to {operation}: {str(error)}",
-        "timestamp": datetime.now().isoformat()
     }
 
 def format_course_entry(course: CourseInfo) -> Dict[str, str]:
@@ -48,45 +50,15 @@ def format_course_entry(course: CourseInfo) -> Dict[str, str]:
         "course_name": course.course_name
     }
 
-def get_course_statistics(course_list: List[CourseInfo]) -> Dict[str, Any]:
-    """Generates statistics from a list of CourseInfo objects."""
-    total_courses = len(course_list)
-    if total_courses == 0:
-        return {
-            "total_courses": 0,
-            "departments": {},
-            "unique_departments": 0,
-            "average_course_name_length": 0,
-            "average_course_code_length": 0
-        }
-
-    department_counts = {}
-    total_name_length = 0
-    total_code_length = 0
-
-    for course in course_list:
-        department_code = course.course_code[:2].upper() # Assuming department is first two chars
-        department_counts[department_code] = department_counts.get(department_code, 0) + 1
-        total_name_length += len(course.course_name)
-        total_code_length += len(course.course_code)
-
-    return {
-        "total_courses": total_courses,
-        "departments": dict(sorted(department_counts.items())),
-        "unique_departments": len(department_counts),
-        "average_course_name_length": round(total_name_length / total_courses, 2),
-        "average_course_code_length": round(total_code_length / total_courses, 2)
-    }
-
 def find_courses(course_list: List[CourseInfo],
                 search_term: Optional[str] = None,
-                course_code: Optional[str] = None) -> List[CourseInfo]:
-    """Helper function to find courses by search term or course code from a list of CourseInfo."""
+                course_code_exact: Optional[str] = None) -> List[CourseInfo]:
+    """Helper function to find courses by search term or exact course code from a list of CourseInfo."""
     filtered_courses = []
 
-    if course_code:
-        course_code_upper = course_code.upper()
-        logger.debug(f"Filtering by exact course code: '{course_code}'")
+    if course_code_exact:
+        course_code_upper = course_code_exact.upper()
+        logger.debug(f"Filtering by exact course code: '{course_code_exact}'")
         for course in course_list:
             if course.course_code.upper() == course_code_upper:
                 filtered_courses.append(course)
@@ -125,7 +97,7 @@ def register_coursecode_tools(mcp_instance, session_manager_instance):
             scraper = await session_manager.get_coursecode_scraper()
             logger.info("get_all_courses called")
             
-            course_list = scraper.fetch_course_list() # This returns List[CourseInfo]
+            course_list = scraper.fetch_course_list()
             
             formatted_courses = [format_course_entry(course) for course in course_list]
             
@@ -133,7 +105,6 @@ def register_coursecode_tools(mcp_instance, session_manager_instance):
                 "success": True,
                 "message": f"Successfully retrieved {len(formatted_courses)} courses.",
                 "courses": formatted_courses,
-                "timestamp": datetime.now().isoformat()
             }
             logger.info(f"Retrieved {len(formatted_courses)} courses")
             log_tool_response("get_all_courses", result)
@@ -157,7 +128,7 @@ def register_coursecode_tools(mcp_instance, session_manager_instance):
             scraper = await session_manager.get_coursecode_scraper()
             logger.info(f"search_courses called with search_term: {search_term}")
 
-            all_courses = scraper.fetch_course_list() # This returns List[CourseInfo]
+            all_courses = scraper.fetch_course_list()
             matching_courses_info = find_courses(all_courses, search_term=search_term)
             
             formatted_courses = [format_course_entry(course) for course in matching_courses_info]
@@ -172,7 +143,6 @@ def register_coursecode_tools(mcp_instance, session_manager_instance):
                 "message": message,
                 "search_term": search_term,
                 "courses": formatted_courses,
-                "timestamp": datetime.now().isoformat()
             }
             logger.info(message)
             log_tool_response("search_courses", result)
@@ -182,63 +152,139 @@ def register_coursecode_tools(mcp_instance, session_manager_instance):
             return await handle_coursecode_error(e, "search courses")
 
 
-    @mcp.tool(name="get_course_details", description="Provides detailed information for a specific course code.")
-    async def get_course_details(course_code: str) -> Dict[str, Any]:
+    @mcp.tool(name="get_course_details", description="Provides detailed information for a specific course, including its timetable, by either course code or course name.")
+    async def get_course_details(identifier: str) -> Dict[str, Any]:
         """
-        Provides detailed information for a specific course code.
+        Provides detailed information for a specific course, including its timetable,
+        by either exact course code or a search term for its name.
         Args:
-            course_code: The exact course code to retrieve details for.
+            identifier: The exact course code (e.g., "BT101") or a search term/name (e.g., "Data Structures").
         Returns:
             Dictionary containing success status, message, and course details.
         """
-        log_tool_call("get_course_details", course_code=course_code)
+        log_tool_call("get_course_details", identifier=identifier)
         try:
-            scraper = await session_manager.get_coursecode_scraper()
-            logger.info(f"get_course_details called for course_code: {course_code}")
-
-            all_courses = scraper.fetch_course_list() # This returns List[CourseInfo]
-            # Use find_courses to get the CourseInfo object
-            matching_course_info = find_courses(all_courses, course_code=course_code)
+            course_scraper = await session_manager.get_coursecode_scraper()
+            timetable_scraper = await session_manager.get_timetable_scraper()
             
-            if not matching_course_info:
-                # If no exact match, try suggesting similar ones (optional, for more helpful responses)
-                suggested_courses_info = find_courses(all_courses, search_term=course_code)
-                formatted_suggestions = [format_course_entry(c) for c in suggested_courses_info]
+            logger.info(f"get_course_details called with identifier: {identifier}")
+
+            all_courses = course_scraper.fetch_course_list()
+            
+            # 1. Try to find by exact course code first
+            matching_course_info_by_code = find_courses(all_courses, course_code_exact=identifier)
+            
+            selected_course_info: Optional[CourseInfo] = None
+            if matching_course_info_by_code:
+                selected_course_info = matching_course_info_by_code[0] # Take the first exact match
+                logger.info(f"Found course by exact code: {identifier}")
+            else:
+                # 2. If not found by exact code, try finding by search term (could be name or partial code)
+                matching_course_info_by_name = find_courses(all_courses, search_term=identifier)
+                if matching_course_info_by_name:
+                    if len(matching_course_info_by_name) == 1:
+                        selected_course_info = matching_course_info_by_name[0]
+                        logger.info(f"Found unique course by name/term: {identifier}")
+                    else:
+                        # Multiple matches, return suggestions and ask user to clarify
+                        formatted_suggestions = [format_course_entry(c) for c in matching_course_info_by_name]
+                        result = {
+                            "success": False,
+                            "message": f"Multiple courses found for '{identifier}'. Please be more specific or provide the exact course code.",
+                            "identifier": identifier,
+                            "suggestions": formatted_suggestions,
+                        }
+                        logger.warning(f"Multiple courses found for '{identifier}'. {len(formatted_suggestions)} suggestions provided.")
+                        log_tool_response("get_course_details", result)
+                        return result
+                else:
+                    # No match found at all
+                    result = {
+                        "success": False,
+                        "message": f"Course '{identifier}' not found by code or name.",
+                        "identifier": identifier,
+                        "suggestions": [],
+                    }
+                    logger.warning(f"Course '{identifier}' not found.")
+                    log_tool_response("get_course_details", result)
+                    return result
+            
+            # Proceed if a unique course was identified
+            course_details = format_course_entry(selected_course_info)
+
+            # Fetch and add timetable details
+            timetable_data = timetable_scraper.get_timetable_data()
+            
+            course_timetable_entries = [
+                entry for entry in timetable_data
+                if entry.course_code.upper() == selected_course_info.course_code.upper()
+            ]
+
+            timetable_summary = {}
+            if course_timetable_entries:
+                total_hours = 0.0
+                days_of_week = set()
+                slots = []
+
+                for entry in course_timetable_entries:
+                    # Calculate duration_hours on the fly from start_time and end_time (datetime.time objects)
+                    # Use a dummy date for timedelta calculation if they are just time objects
+                    dummy_date = datetime.today().date()
+                    start_dt = datetime.combine(dummy_date, entry.start_time)
+                    end_dt = datetime.combine(dummy_date, entry.end_time)
+                    
+                    # Handle overnight classes if applicable (though unlikely for typical timetable periods)
+                    if end_dt < start_dt:
+                        end_dt += timedelta(days=1) # Add a day if end is chronologically before start
+                    
+                    duration_td = end_dt - start_dt
+                    duration_hours = duration_td.total_seconds() / 3600.0
+
+                    total_hours += duration_hours
+                    days_of_week.add(entry.day) # Use 'day' from the new TimeTableEntry
+                    slots.append({
+                        "day": entry.day, # Use 'day'
+                        "period": entry.period, # Add period
+                        "start_time": entry.start_time.strftime("%H:%M"), # Format time objects to string
+                        "end_time": entry.end_time.strftime("%H:%M"),     # Format time objects to string
+                        "duration_hours": round(duration_hours, 2),       # Add calculated duration
+                        "room": entry.room,
+                        "faculty": entry.faculty # Use 'faculty'
+                    })
                 
-                result = {
-                    "success": False,
-                    "message": f"Course '{course_code}' not found.",
-                    "course_code": course_code,
-                    "suggestions": formatted_suggestions,
-                    "timestamp": datetime.now().isoformat()
+                timetable_summary = {
+                    "total_hours_per_week": round(total_hours, 2),
+                    "number_of_days_per_week": len(days_of_week),
+                    "days_of_week": sorted(list(days_of_week)),
+                    "schedule_slots": slots
                 }
-                logger.warning(f"Course '{course_code}' not found. {len(formatted_suggestions)} suggestions provided.")
-                log_tool_response("get_course_details", result)
-                return result
+                logger.info(f"Found timetable entries for course {selected_course_info.course_code}")
+            else:
+                logger.info(f"No timetable entries found for course {selected_course_info.course_code}")
+                timetable_summary = {
+                    "message": "No timetable data available for this course.",
+                    "total_hours_per_week": 0,
+                    "number_of_days_per_week": 0,
+                    "days_of_week": [],
+                    "schedule_slots": []
+                }
             
-            # Assuming find_courses returns a list, and we want the first exact match
-            course_details = format_course_entry(matching_course_info[0])
-
-            # Optionally add department info
-            department_code = course_details["course_code"][:2].upper()
-            course_details["department_code"] = department_code
-            # You might want a mapping for department_code to full department name
+            course_details["timetable_info"] = timetable_summary # Add timetable info to course details
 
             result = {
                 "success": True,
-                "message": f"Details for course '{course_code}' retrieved successfully.",
+                "message": f"Details for course '{selected_course_info.course_code}' ({selected_course_info.course_name}) retrieved successfully.",
                 "course": course_details,
-                "timestamp": datetime.now().isoformat()
             }
-            logger.info(f"Details retrieved for course: {course_code}")
+            logger.info(f"Details retrieved for course: {selected_course_info.course_code}")
             log_tool_response("get_course_details", result)
             return result
         except Exception as e:
             log_tool_response("get_course_details", None, error=e)
-            return await handle_coursecode_error(e, f"get details for course '{course_code}'")
+            return await handle_coursecode_error(e, f"get details for course '{identifier}'")
 
 
-    @mcp.tool(name="get_courses_by_startcode", description="Filters and returns courses belonging to a specified revision code.")
+    @mcp.tool(name="get_courses_by_department", description="Filters and returns courses belonging to a specified department code.")
     async def get_courses_by_department(department_code: str) -> Dict[str, Any]:
         """
         Filters and returns courses belonging to a specified department code.
@@ -252,7 +298,7 @@ def register_coursecode_tools(mcp_instance, session_manager_instance):
             scraper = await session_manager.get_coursecode_scraper()
             logger.info(f"get_courses_by_department called for department: {department_code}")
 
-            all_courses = scraper.fetch_course_list() # This returns List[CourseInfo]
+            all_courses = scraper.fetch_course_list()
             
             department_code_upper = department_code.upper()
             filtered_courses_info = [
@@ -272,7 +318,6 @@ def register_coursecode_tools(mcp_instance, session_manager_instance):
                 "message": message,
                 "department_code": department_code,
                 "courses": formatted_courses,
-                "timestamp": datetime.now().isoformat()
             }
             logger.info(message)
             log_tool_response("get_courses_by_department", result)
@@ -280,11 +325,5 @@ def register_coursecode_tools(mcp_instance, session_manager_instance):
         except Exception as e:
             log_tool_response("get_courses_by_department", None, error=e)
             return await handle_coursecode_error(e, f"get courses by department '{department_code}'")
-
-
-    
-
- 
-       
 
     logger.info("Course code tools registered successfully")
