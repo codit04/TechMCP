@@ -239,6 +239,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 *Simplifying academic data access through AI*
 
-[⭐ Star this repo](https://github.com/your-username/TechMCP) | [🐛 Report Bug](https://github.com/codit04/TechMCP/issues) | [💬 Join Discord](https://discord.gg/fRFGPQKERJ)
+[⭐ Star this repo](https://github.com/codit04/TechMCP) | [🐛 Report Bug](https://github.com/codit04/TechMCP/issues) | [💬 Join Discord](https://discord.gg/fRFGPQKERJ)
 
 </div>
