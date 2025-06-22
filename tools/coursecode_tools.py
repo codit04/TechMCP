@@ -238,7 +238,7 @@ def register_coursecode_tools(mcp_instance, session_manager_instance):
             return await handle_coursecode_error(e, f"get details for course '{course_code}'")
 
 
-    @mcp.tool(name="get_courses_by_department", description="Filters and returns courses belonging to a specified department code.")
+    @mcp.tool(name="get_courses_by_startcode", description="Filters and returns courses belonging to a specified revision code.")
     async def get_courses_by_department(department_code: str) -> Dict[str, Any]:
         """
         Filters and returns courses belonging to a specified department code.
@@ -282,76 +282,9 @@ def register_coursecode_tools(mcp_instance, session_manager_instance):
             return await handle_coursecode_error(e, f"get courses by department '{department_code}'")
 
 
-    @mcp.tool(name="get_course_statistics", description="Generates comprehensive statistics about the course catalog.")
-    async def get_course_statistics() -> Dict[str, Any]:
-        """
-        Generates comprehensive statistics about the course catalog, including total courses, department distribution,
-        and average name/code lengths.
-        Returns:
-            Dictionary containing success status, message, and statistics.
-        """
-        log_tool_call("get_course_statistics")
-        try:
-            scraper = await session_manager.get_coursecode_scraper()
-            logger.info("get_course_statistics called")
+    
 
-            course_list = scraper.fetch_course_list() # This returns List[CourseInfo]
-            stats = get_course_statistics(course_list)
-            
-            result = {
-                "success": True,
-                "message": "Course statistics generated successfully.",
-                "statistics": stats,
-                "timestamp": datetime.now().isoformat()
-            }
-            logger.info("Course statistics generated.")
-            log_tool_response("get_course_statistics", result)
-            return result
-        except Exception as e:
-            log_tool_response("get_course_statistics", None, error=e)
-            return await handle_coursecode_error(e, "get course statistics")
-
-
-    @mcp.tool(name="refresh_course_cache", description="Explicitly clears and re-fetches the course cache, ensuring the latest data.")
-    async def refresh_course_cache() -> Dict[str, Any]:
-        """
-        Explicitly clears and re-fetches the course cache, ensuring the latest data.
-        Returns:
-            Dictionary containing refresh status and updated course count
-        """
-        log_tool_call("refresh_course_cache")
-        
-        try:
-            scraper = await session_manager.get_coursecode_scraper()
-            logger.info("refresh_course_cache called")
-            
-            # Clear existing cache
-            scraper.cache = None
-            scraper.last_fetch = None
-            
-            # Fetch fresh data
-            course_list = scraper.fetch_course_list() # This returns List[CourseInfo]
-            
-            stats = get_course_statistics(course_list) # This now expects List[CourseInfo]
-            
-            result = {
-                "success": True,
-                "message": "Course cache refreshed successfully",
-                "courses_loaded": len(course_list),
-                "statistics": stats,
-                "refreshed_at": datetime.now().isoformat(),
-                "cache_info": {
-                    "is_cached": scraper.is_cache_valid(),
-                    "last_fetch": scraper.last_fetch.isoformat() if scraper.last_fetch else None
-                }
-            }
-            
-            logger.info(f"Cache refreshed with {len(course_list)} courses")
-            log_tool_response("refresh_course_cache", result)
-            return result
-            
-        except Exception as e:
-            log_tool_response("refresh_course_cache", None, error=e)
-            return await handle_coursecode_error(e, "refresh course cache")
+ 
+       
 
     logger.info("Course code tools registered successfully")
