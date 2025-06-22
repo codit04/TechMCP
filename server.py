@@ -11,10 +11,11 @@ from datetime import datetime
 from fastmcp import FastMCP
 
 # Import our modular components
-from scrapers import CAMarksScraper, AttendanceScraper, TimeTableScraper
+from scrapers import CAMarksScraper, AttendanceScraper, TimeTableScraper, CourseCodeScraper
 from tools.marks_tools import register_marks_tools
 from tools.attendance_tools import register_attendance_tools
 from tools.timetable_tools import register_timetable_tools
+from tools.coursecode_tools import register_coursecode_tools # NEW: Import coursecode tools
 
 # Enhanced logging configuration
 logging.basicConfig(
@@ -39,6 +40,7 @@ class SessionManager:
         self._marks_scraper = None
         self._attendance_scraper = None
         self._timetable_scraper = None
+        self._coursecode_scraper = None # NEW: Initialize coursecode scraper
         logger.info("SessionManager initialized")
     
     async def get_scraper(self) -> CAMarksScraper:
@@ -64,6 +66,14 @@ class SessionManager:
             self._timetable_scraper = TimeTableScraper()
             logger.info("New timetable scraper instance created")
         return self._timetable_scraper
+
+    async def get_coursecode_scraper(self) -> CourseCodeScraper: # NEW: Method to get coursecode scraper
+        """Get or create a coursecode scraper instance"""
+        if self._coursecode_scraper is None:
+            logger.info("Creating new coursecode scraper instance...")
+            self._coursecode_scraper = CourseCodeScraper()
+            logger.info("New coursecode scraper instance created")
+        return self._coursecode_scraper
     
     async def close_session(self):
         """Close all scraper sessions"""
@@ -85,6 +95,12 @@ class SessionManager:
             self._timetable_scraper = None
             logger.info("Timetable scraper session closed successfully")
 
+        if self._coursecode_scraper: # NEW: Close coursecode scraper session
+            logger.info("Closing coursecode scraper session...")
+            self._coursecode_scraper.close()
+            self._coursecode_scraper = None
+            logger.info("Coursecode scraper session closed successfully")
+
 # Create global session manager
 logger.info("Creating global session manager...")
 session_manager = SessionManager()
@@ -95,6 +111,7 @@ logger.info("Registering MCP tools...")
 register_marks_tools(mcp, session_manager)
 register_attendance_tools(mcp, session_manager)
 register_timetable_tools(mcp, session_manager)
+register_coursecode_tools(mcp, session_manager) # NEW: Register coursecode tools
 logger.info("All tools registered successfully")
 
 if __name__ == "__main__":
@@ -114,4 +131,4 @@ if __name__ == "__main__":
         # Cleanup on exit
         logger.info("Performing cleanup...")
         # session cleanup will be handled automatically
-        logger.info("TechMCP server cleanup completed") 
+        logger.info("TechMCP server cleanup completed")
