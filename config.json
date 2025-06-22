@@ -1,7 +1,7 @@
 {
     "credentials": {
-        "roll_number": "21pt39",
-        "password": "sed@21pt39"
+        "roll_number": "YOUR_ROLL_NUMBER",
+        "password": "YOUR_PASSWORD"
     },
     "server": {
         "host": "localhost",
