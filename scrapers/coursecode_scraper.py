@@ -157,12 +157,3 @@ class CourseCodeScraper:
     def close(self):
         self.client.close()
 
-# Example usage
-if __name__ == "__main__":
-    scraper = CourseCodeScraper()
-    try:
-        course_list = scraper.fetch_course_list()
-        course_dict = {course.course_code: course.course_name for course in course_list}
-        print(json.dumps(course_dict, indent=2))  # Pretty-print as JSON
-    finally:
-        scraper.close()
