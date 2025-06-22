@@ -284,46 +284,7 @@ def register_coursecode_tools(mcp_instance, session_manager_instance):
             return await handle_coursecode_error(e, f"get details for course '{identifier}'")
 
 
-    @mcp.tool(name="get_courses_by_department", description="Filters and returns courses belonging to a specified department code.")
-    async def get_courses_by_department(department_code: str) -> Dict[str, Any]:
-        """
-        Filters and returns courses belonging to a specified department code.
-        Args:
-            department_code: The two-character department code (e.g., "PD", "BT").
-        Returns:
-            Dictionary containing success status, message, and a list of courses for the department.
-        """
-        log_tool_call("get_courses_by_department", department_code=department_code)
-        try:
-            scraper = await session_manager.get_coursecode_scraper()
-            logger.info(f"get_courses_by_department called for department: {department_code}")
-
-            all_courses = scraper.fetch_course_list()
-            
-            department_code_upper = department_code.upper()
-            filtered_courses_info = [
-                course for course in all_courses
-                if course.course_code.upper().startswith(department_code_upper)
-            ]
-            
-            formatted_courses = [format_course_entry(course) for course in filtered_courses_info]
-
-            if not formatted_courses:
-                message = f"No courses found for department '{department_code}'."
-            else:
-                message = f"Found {len(formatted_courses)} courses for department '{department_code}'."
-
-            result = {
-                "success": True,
-                "message": message,
-                "department_code": department_code,
-                "courses": formatted_courses,
-            }
-            logger.info(message)
-            log_tool_response("get_courses_by_department", result)
-            return result
-        except Exception as e:
-            log_tool_response("get_courses_by_department", None, error=e)
-            return await handle_coursecode_error(e, f"get courses by department '{department_code}'")
+   
+    
 
     logger.info("Course code tools registered successfully")
