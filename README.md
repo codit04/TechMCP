@@ -1,7 +1,7 @@
 # 🎓 TechMCP - PSG College of Technology MCP Server
 
 [![MCP](https://img.shields.io/badge/MCP-Compatible-blue)](https://modelcontextprotocol.io/)
-[![Python](https://img.shields.io/badge/Python-3.8+-green)](https://python.org)
+[![Python](https://img.shields.io/badge/Python-3.10+-green)](https://python.org)
 [![FastMCP](https://img.shields.io/badge/FastMCP-2.0+-orange)](https://github.com/jlowin/fastmcp)
 [![PSG Tech](https://img.shields.io/badge/PSG-College%20of%20Technology-red)](https://psgtech.edu)
 
@@ -47,7 +47,7 @@
 
 ## 📋 Prerequisites
 
-- **Python 3.8+**
+- **Python 3.10+**
 - **Valid PSG Tech e-campus credentials**
 - **Internet connection** for portal access
 
