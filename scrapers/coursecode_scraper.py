@@ -35,7 +35,7 @@ def log_http_response(response: httpx.Response):
 # HTTP Client with logging
 class LoggedHTTPClient:
     def __init__(self):
-        self.client = httpx.Client(follow_redirects=True, timeout=30.0)
+        self.client = httpx.Client(follow_redirects=True, timeout=30.0,verify=False)
 
     def get(self, url: str, **kwargs):
         log_http_request("GET", url, **kwargs)
